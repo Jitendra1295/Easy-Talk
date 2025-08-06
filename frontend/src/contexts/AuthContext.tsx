@@ -82,6 +82,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     const logout = () => {
+        // Clear chat persistence data for the current user
+        if (user) {
+            localStorage.removeItem(`currentChatId_${user._id}`);
+        }
         setUser(null);
         localStorage.removeItem('token');
         localStorage.removeItem('user');

@@ -47,8 +47,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     return (
         <div
             className={cn(
-                'flex gap-2 mb-4 group',
-                isOwnMessage ? 'flex-row-reverse' : 'flex-row'
+                'flex gap-2 group',
+                isOwnMessage ? 'flex-row-reverse' : 'flex-row',
+                isLastMessage ? 'mb-2' : 'mb-4'
             )}
         >
             {!isOwnMessage && (
