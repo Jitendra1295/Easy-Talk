@@ -233,20 +233,54 @@ const Chat: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Chat List - Hidden */}
+                {/* Chat List */}
                 <div className="flex-1 overflow-y-auto">
-                    {/* Chat history is hidden - no chats displayed */}
-                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                        <div className="text-center p-8">
-                            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                                <Users className="w-8 h-8 text-gray-400" />
+                    {chats.map((chat) => {
+                        const chatName = getChatName(chat);
+                        const chatAvatar = getChatAvatar(chat);
+
+                        return (
+                            <div
+                                key={chat._id}
+                                onClick={() => setCurrentChat(chat as any)}
+                                className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${currentChat?._id === chat._id ? 'bg-primary-50 border-primary-200' : ''
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Avatar user={chatAvatar || user!} size="md" showStatus />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="font-medium text-gray-900 truncate">{chatName}</h3>
+                                            {chat.lastMessage && (
+                                                <span className="text-xs text-gray-500">
+                                                    {formatChatTime(chat.lastMessage.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-sm text-gray-500 truncate">
+                                                {chat.lastMessage ? (
+                                                    <>
+                                                        <span className="font-medium">
+                                                            {chat.lastMessage.sender._id === user?._id ? 'You' : chat.lastMessage.sender.username}
+                                                        </span>
+                                                        : {chat.lastMessage.content}
+                                                    </>
+                                                ) : (
+                                                    'No messages yet'
+                                                )}
+                                            </p>
+                                            {chat.unreadCount > 0 && (
+                                                <span className="bg-primary-600 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                                                    {chat.unreadCount}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">No Chat History</h3>
-                            <p className="text-sm text-gray-500 mb-4">
-                                Start a new conversation by clicking the buttons below
-                            </p>
-                        </div>
-                    </div>
+                        );
+                    })}
                 </div>
 
                 {/* New Chat Buttons */}
