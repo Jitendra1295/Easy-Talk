@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Chat, ChatPreview, Message, User } from '@/types';
+import { Chat, ChatPreview, Message } from '@/types';
 import apiService from '@/services/api';
 import socketService from '@/services/socket';
 import { useAuth } from './AuthContext';
@@ -40,6 +40,18 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     const [currentChat, setCurrentChat] = useState<Chat | null>(null);
     const [typingUsers, setTypingUsers] = useState<string[]>([]);
 
+    // Enhanced setCurrentChat function with persistence
+    const setCurrentChatWithPersistence = (chat: Chat | null) => {
+        setCurrentChat(chat);
+        if (chat && user) {
+            // Save current chat ID to localStorage with user-specific key
+            localStorage.setItem(`currentChatId_${user._id}`, chat._id);
+        } else if (user) {
+            // Remove saved chat ID when chat is cleared
+            localStorage.removeItem(`currentChatId_${user._id}`);
+        }
+    };
+
     // Fetch chats
     const {
         data: chats = [],
@@ -51,11 +63,39 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         enabled: !!user,
     });
 
+    // Restore saved chat when chats are loaded
+    useEffect(() => {
+        if (user && chats.length > 0 && !currentChat) {
+            const savedChatId = localStorage.getItem(`currentChatId_${user._id}`);
+            if (savedChatId) {
+                const savedChatPreview = chats.find(chat => chat._id === savedChatId);
+                if (savedChatPreview) {
+                    console.log('Restoring saved chat:', savedChatPreview);
+                    // Convert ChatPreview to Chat by adding the missing createdAt field
+                    const savedChat: Chat = {
+                        ...savedChatPreview,
+                        createdAt: new Date(), // We'll use current date as fallback
+                        lastMessage: savedChatPreview.lastMessage ? {
+                            _id: '', // We don't have the message ID in preview
+                            content: savedChatPreview.lastMessage.content,
+                            sender: savedChatPreview.lastMessage.sender,
+                            chatId: savedChatPreview._id,
+                            messageType: 'text' as const,
+                            createdAt: savedChatPreview.lastMessage.createdAt,
+                            updatedAt: savedChatPreview.lastMessage.createdAt,
+                            readBy: []
+                        } : undefined
+                    };
+                    setCurrentChat(savedChat);
+                }
+            }
+        }
+    }, [user, chats, currentChat]);
+
     // Fetch current chat details
     const {
         data: currentChatData,
         isLoading: currentChatLoading,
-        refetch: refetchCurrentChat,
     } = useQuery({
         queryKey: ['chat', currentChat?._id],
         queryFn: () => apiService.getChatById(currentChat!._id),
@@ -66,7 +106,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     const {
         data: messages = [],
         isLoading: messagesLoading,
-        refetch: refetchMessages,
     } = useQuery({
         queryKey: ['messages', currentChat?._id],
         queryFn: () => apiService.getMessages(currentChat!._id),
@@ -212,7 +251,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     const createPrivateChat = async (userId: string) => {
         try {
             const chat = await apiService.createPrivateChat(userId);
-            setCurrentChat(chat);
+            setCurrentChatWithPersistence(chat);
             await refetchChats();
             toast.success('Private chat created!');
         } catch (error: any) {
@@ -224,7 +263,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     const createGroupChat = async (name: string, participants: string[]) => {
         try {
             const chat = await apiService.createGroupChat({ name, participants });
-            setCurrentChat(chat);
+            setCurrentChatWithPersistence(chat);
             await refetchChats();
             toast.success('Group chat created!');
         } catch (error: any) {
@@ -265,7 +304,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         currentChat: currentChatData || currentChat,
         messages,
         typingUsers,
-        setCurrentChat,
+        setCurrentChat: setCurrentChatWithPersistence,
         sendMessage,
         createPrivateChat,
         createGroupChat,

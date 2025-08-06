@@ -8,11 +8,9 @@ import {
     Plus,
     Send,
     Paperclip,
-    Image as ImageIcon,
     Users,
     UserPlus,
-    MoreVertical,
-    Settings
+    MoreVertical
 } from 'lucide-react';
 import apiService from '@/services/api';
 import Avatar from '@/components/Avatar';
@@ -20,7 +18,7 @@ import MessageBubble from '@/components/MessageBubble';
 import TypingIndicator from '@/components/TypingIndicator';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { formatChatTime } from '@/utils/date';
-import { User } from '@/types';
+import { User, type Chat } from '@/types';
 import toast from 'react-hot-toast';
 
 const Chat: React.FC = () => {
@@ -233,20 +231,87 @@ const Chat: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Chat List - Hidden */}
+                {/* Chat List */}
                 <div className="flex-1 overflow-y-auto">
-                    {/* Chat history is hidden - no chats displayed */}
-                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                        <div className="text-center p-8">
-                            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                                <Users className="w-8 h-8 text-gray-400" />
-                            </div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">No Chat History</h3>
-                            <p className="text-sm text-gray-500 mb-4">
-                                Start a new conversation by clicking the buttons below
-                            </p>
+                    {chats.length > 0 ? (
+                        <div className="space-y-1 p-2">
+                            {chats.map((chat) => (
+                                <div
+                                    key={chat._id}
+                                    onClick={() => {
+                                        // Convert ChatPreview to Chat for compatibility
+                                        const fullChat: Chat = {
+                                            ...chat,
+                                            createdAt: new Date(), // Fallback date
+                                            lastMessage: chat.lastMessage ? {
+                                                _id: '', // We don't have the message ID in preview
+                                                content: chat.lastMessage.content,
+                                                sender: chat.lastMessage.sender,
+                                                chatId: chat._id,
+                                                messageType: 'text' as const,
+                                                createdAt: chat.lastMessage.createdAt,
+                                                updatedAt: chat.lastMessage.createdAt,
+                                                readBy: []
+                                            } : undefined
+                                        };
+                                        setCurrentChat(fullChat);
+                                    }}
+                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                        currentChat?._id === chat._id
+                                            ? 'bg-primary-50 border border-primary-200'
+                                            : 'hover:bg-gray-100'
+                                    }`}
+                                >
+                                    <Avatar 
+                                        user={getChatAvatar(chat) || user!} 
+                                        size="md" 
+                                        showStatus 
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="font-semibold text-gray-900 truncate">
+                                                {getChatName(chat)}
+                                            </h3>
+                                            {chat.lastMessage && (
+                                                <span className="text-xs text-gray-500 flex-shrink-0">
+                                                    {formatChatTime(chat.lastMessage.createdAt)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {chat.lastMessage && (
+                                            <p className="text-sm text-gray-600 truncate">
+                                                {chat.lastMessage.sender.username === user?.username 
+                                                    ? 'You: ' 
+                                                    : `${chat.lastMessage.sender.username}: `
+                                                }
+                                                {chat.lastMessage.content}
+                                            </p>
+                                        )}
+                                        {chat.unreadCount > 0 && (
+                                            <div className="flex items-center justify-between mt-1">
+                                                <div></div>
+                                                <span className="bg-primary-500 text-white text-xs rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                                                    {chat.unreadCount}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                            <div className="text-center p-8">
+                                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                                    <Users className="w-8 h-8 text-gray-400" />
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">No Chat History</h3>
+                                <p className="text-sm text-gray-500 mb-4">
+                                    Start a new conversation by clicking the buttons below
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* New Chat Buttons */}
