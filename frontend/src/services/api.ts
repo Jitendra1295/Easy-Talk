@@ -84,8 +84,15 @@ class ApiService {
 
   // Chat endpoints
   async getChats(): Promise<ChatPreview[]> {
-    const response: AxiosResponse<ApiResponse<ChatPreview[]>> = await this.api.get('/chats');
-    return response.data.data!;
+    console.log('🚀 API: Making getChats request to /chats');
+    try {
+      const response: AxiosResponse<ApiResponse<ChatPreview[]>> = await this.api.get('/chats');
+      console.log('✅ API: getChats response:', response.data);
+      return response.data.data!;
+    } catch (error) {
+      console.error('❌ API: getChats error:', error);
+      throw error;
+    }
   }
 
   async getChatById(chatId: string): Promise<Chat> {

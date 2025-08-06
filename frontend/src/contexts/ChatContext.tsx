@@ -57,11 +57,24 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         data: chats = [],
         isLoading: chatsLoading,
         refetch: refetchChats,
+        error: chatsError,
     } = useQuery({
         queryKey: ['chats'],
         queryFn: apiService.getChats,
         enabled: !!user,
+        retry: 1,
     });
+
+    // Debug logging for chats query
+    useEffect(() => {
+        console.log('🔍 ChatContext Debug:', {
+            user: user ? { id: user._id, username: user.username } : null,
+            chatsLoading,
+            chatsLength: chats.length,
+            chatsError: chatsError?.message,
+            queryEnabled: !!user
+        });
+    }, [user, chatsLoading, chats.length, chatsError]);
 
     // Restore saved chat when chats are loaded
     useEffect(() => {

@@ -36,16 +36,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const token = localStorage.getItem('token');
             const savedUser = localStorage.getItem('user');
 
+            console.log('🔐 AuthContext: Initializing auth', { token: !!token, savedUser: !!savedUser });
+
             if (token && savedUser) {
                 try {
+                    console.log('🔐 AuthContext: Getting current user...');
                     const currentUser = await apiService.getCurrentUser();
+                    console.log('✅ AuthContext: User loaded:', currentUser);
                     setUser(currentUser);
                     socketService.connect(token);
                 } catch (error) {
-                    console.error('Failed to get current user:', error);
+                    console.error('❌ AuthContext: Failed to get current user:', error);
                     localStorage.removeItem('token');
                     localStorage.removeItem('user');
                 }
+            } else {
+                console.log('🔐 AuthContext: No token or saved user found');
             }
             setLoading(false);
         };
