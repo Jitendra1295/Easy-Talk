@@ -26,7 +26,35 @@ const messageSchema = new Schema<IMessage>({
     readBy: [{
         type: Schema.Types.ObjectId,
         ref: 'User'
-    }]
+    }],
+    deliveredTo: [{
+        type: Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    parentMessageId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Message',
+        default: null
+    },
+    threadRootId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Message',
+        default: null
+    },
+    forwardedFrom: {
+        userId: { type: Schema.Types.ObjectId, ref: 'User' },
+        chatId: { type: Schema.Types.ObjectId, ref: 'Chat' },
+        messageId: { type: Schema.Types.ObjectId, ref: 'Message' },
+        at: { type: Date }
+    },
+    reactions: {
+        type: Map,
+        of: [Schema.Types.ObjectId], // emoji -> userIds
+        default: {}
+    },
+    editedAt: { type: Date, default: null },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
 }, {
     timestamps: true
 });
@@ -35,6 +63,7 @@ const messageSchema = new Schema<IMessage>({
 messageSchema.index({ chatId: 1, createdAt: -1 });
 messageSchema.index({ sender: 1 });
 messageSchema.index({ readBy: 1 });
+messageSchema.index({ threadRootId: 1 });
 
 // Virtual for message response
 messageSchema.virtual('toResponse').get(function () {
@@ -45,6 +74,14 @@ messageSchema.virtual('toResponse').get(function () {
         messageType: this.messageType,
         chatId: this.chatId,
         readBy: this.readBy,
+        deliveredTo: this.deliveredTo,
+        parentMessageId: this.parentMessageId,
+        threadRootId: this.threadRootId,
+        forwardedFrom: this.forwardedFrom,
+        reactions: Object.fromEntries(this.reactions || []),
+        editedAt: this.editedAt,
+        deletedAt: this.deletedAt,
+        deletedBy: this.deletedBy,
         createdAt: this.createdAt
     };
 });

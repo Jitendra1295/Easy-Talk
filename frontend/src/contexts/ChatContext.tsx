@@ -12,7 +12,11 @@ interface ChatContextType {
     messages: Message[];
     typingUsers: string[];
     setCurrentChat: (chat: Chat | null) => void;
-    sendMessage: (content: string, messageType?: 'text' | 'image' | 'file') => Promise<void>;
+    sendMessage: (content: string, messageType?: 'text' | 'image' | 'file', options?: { parentMessageId?: string | null; threadRootId?: string | null; forwardedFrom?: { userId: string; chatId: string; messageId: string } | null }) => Promise<void>;
+    reactToMessage: (messageId: string, emoji: string) => void;
+    editMessage: (messageId: string, content: string) => void;
+    deleteMessage: (messageId: string) => void;
+    forwardMessage: (targetChatId: string, message: Message) => void;
     createPrivateChat: (userId: string) => Promise<void>;
     createGroupChat: (name: string, participants: string[]) => Promise<void>;
     markAsRead: () => void;
@@ -195,6 +199,27 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             });
         };
 
+        const handleReactionUpdated = (data: { messageId: string; chatId: string; emoji: string; userId: string; action: 'add' | 'remove'; reactions: Record<string, string[]> }) => {
+            if (!currentChat || data.chatId !== currentChat._id) return;
+            queryClient.setQueryData(['messages', currentChat._id], (old: any[] = []) => {
+                return old.map((m: any) => (m._id === data.messageId ? { ...m, reactions: data.reactions } : m));
+            });
+        };
+
+        const handleMessageUpdated = (updated: any) => {
+            if (!currentChat || updated.chatId !== currentChat._id) return;
+            queryClient.setQueryData(['messages', currentChat._id], (old: any[] = []) => {
+                return old.map((m: any) => (m._id === updated._id ? { ...m, ...updated } : m));
+            });
+        };
+
+        const handleMessageDeleted = (data: { messageId: string; chatId: string; deletedBy: string }) => {
+            if (!currentChat || data.chatId !== currentChat._id) return;
+            queryClient.setQueryData(['messages', currentChat._id], (old: any[] = []) => {
+                return old.map((m: any) => (m._id === data.messageId ? { ...m, deletedAt: new Date().toISOString(), deletedBy: data.deletedBy, content: 'Message deleted' } : m));
+            });
+        };
+
         // Set up socket listeners via raw socket instance
         const sock = socketService.getSocket();
         sock?.on('message', handleNewMessage as any);
@@ -202,6 +227,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         sock?.on('messageRead', handleMessageRead as any);
         sock?.on('newChat', handleChatCreated as any);
         sock?.on('chatUpdated', handleChatUpdated as any);
+        sock?.on('reactionUpdated', handleReactionUpdated as any);
+        sock?.on('messageUpdated', handleMessageUpdated as any);
+        sock?.on('messageDeleted', handleMessageDeleted as any);
 
         return () => {
             sock?.off('message', handleNewMessage as any);
@@ -209,6 +237,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             sock?.off('messageRead', handleMessageRead as any);
             sock?.off('newChat', handleChatCreated as any);
             sock?.off('chatUpdated', handleChatUpdated as any);
+            sock?.off('reactionUpdated', handleReactionUpdated as any);
+            sock?.off('messageUpdated', handleMessageUpdated as any);
+            sock?.off('messageDeleted', handleMessageDeleted as any);
         };
     }, [user, currentChat, queryClient]);
 
@@ -222,12 +253,16 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         }
     }, [currentChat]);
 
-    const sendMessage = async (content: string, messageType: 'text' | 'image' | 'file' = 'text') => {
+    const sendMessage = async (
+        content: string,
+        messageType: 'text' | 'image' | 'file' = 'text',
+        options?: { parentMessageId?: string | null; threadRootId?: string | null; forwardedFrom?: { userId: string; chatId: string; messageId: string } | null }
+    ) => {
         if (!currentChat) return;
 
         try {
             // Emit via socket for immediate broadcast
-            socketService.sendMessage(currentChat._id, content, messageType);
+            socketService.sendMessage(currentChat._id, content, messageType, options);
 
             // Optimistic UI update (will be deduped when server message arrives)
             const optimisticMessage: Message = {
@@ -263,6 +298,42 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             toast.error(error.response?.data?.message || 'Failed to send message');
             throw error;
         }
+    };
+
+    const reactToMessage = (messageId: string, emoji: string) => {
+        if (!currentChat) return;
+        // Optimistic toggle
+        queryClient.setQueryData(['messages', currentChat._id], (old: any[] = []) => {
+            return old.map((m: any) => {
+                if (m._id !== messageId) return m;
+                const reactions: Record<string, string[]> = { ...(m.reactions || {}) };
+                const list = reactions[emoji] || [];
+                const has = list.includes(user!._id);
+                reactions[emoji] = has ? list.filter(id => id !== user!._id) : [...list, user!._id];
+                return { ...m, reactions };
+            });
+        });
+        socketService.reactMessage(messageId, currentChat._id, emoji);
+    };
+
+    const editMessage = (messageId: string, content: string) => {
+        if (!currentChat) return;
+        socketService.editMessage(messageId, currentChat._id, content);
+    };
+
+    const deleteMessage = (messageId: string) => {
+        if (!currentChat) return;
+        socketService.deleteMessage(messageId, currentChat._id);
+    };
+
+    const forwardMessage = (targetChatId: string, message: Message) => {
+        if (!targetChatId) return;
+        const payload = {
+            parentMessageId: null,
+            threadRootId: null,
+            forwardedFrom: { userId: (message as any).sender?._id || (message as any).sender, chatId: message.chatId, messageId: message._id },
+        };
+        socketService.sendMessage(targetChatId, message.content, message.messageType, payload as any);
     };
 
     const createPrivateChat = async (userId: string) => {
@@ -322,6 +393,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         typingUsers,
         setCurrentChat: setCurrentChatWithPersistence,
         sendMessage,
+        reactToMessage,
+        editMessage,
+        deleteMessage,
+        forwardMessage,
         createPrivateChat,
         createGroupChat,
         markAsRead,

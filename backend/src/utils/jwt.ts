@@ -4,6 +4,8 @@ import { IUserResponse } from '../types';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
+const expiresInSeconds = JWT_EXPIRES_IN === '7d' ? 604800 : parseInt(JWT_EXPIRES_IN);
+
 export const generateToken = (user: IUserResponse): string => {
     return jwt.sign(
         {
@@ -12,7 +14,7 @@ export const generateToken = (user: IUserResponse): string => {
             username: user.username
         },
         JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN }
+        { expiresIn: expiresInSeconds }
     );
 };
 

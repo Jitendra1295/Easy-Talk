@@ -32,6 +32,14 @@ export interface IMessage extends Document {
   messageType: 'text' | 'image' | 'file';
   chatId: string;
   readBy: string[];
+  deliveredTo?: string[];
+  parentMessageId?: string | null;
+  threadRootId?: string | null;
+  forwardedFrom?: { userId: string; chatId: string; messageId: string; at: Date } | null;
+  reactions?: Record<string, string[]>; // { '👍': ['userId1'] }
+  editedAt?: Date | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -55,6 +63,14 @@ export interface IMessageResponse {
   messageType: 'text' | 'image' | 'file';
   chatId: string;
   readBy: string[];
+  deliveredTo?: string[];
+  parentMessageId?: string | null;
+  threadRootId?: string | null;
+  forwardedFrom?: { userId: string; chatId: string; messageId: string; at: Date } | null;
+  reactions?: Record<string, string[]>;
+  editedAt?: Date | null;
+  deletedAt?: Date | null;
+  deletedBy?: string | null;
   createdAt: Date;
 }
 
@@ -99,6 +115,9 @@ export interface ServerToClientEvents {
   chatUpdated: (chat: IChatResponse) => void;
   userJoined: (data: { chatId: string; user: IUserResponse }) => void;
   userLeft: (data: { chatId: string; userId: string }) => void;
+  messageUpdated: (message: IMessageResponse) => void;
+  messageDeleted: (data: { messageId: string; chatId: string; deletedBy: string }) => void;
+  reactionUpdated: (data: { messageId: string; chatId: string; emoji: string; userId: string; action: 'add' | 'remove'; reactions: Record<string, string[]> }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -110,6 +129,9 @@ export interface ClientToServerEvents {
   createGroup: (data: { name: string; description?: string; participants: string[] }) => void;
   joinGroup: (chatId: string) => void;
   leaveGroup: (chatId: string) => void;
+  reactMessage: (data: { messageId: string; chatId: string; emoji: string }) => void;
+  editMessage: (data: { messageId: string; chatId: string; content: string }) => void;
+  deleteMessage: (data: { messageId: string; chatId: string }) => void;
 }
 
 export interface InterServerEvents {

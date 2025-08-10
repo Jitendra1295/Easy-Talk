@@ -50,6 +50,7 @@ const Chat: React.FC = () => {
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
     const [groupName, setGroupName] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [replyTo, setReplyTo] = useState<any | null>(null);
 
     const [selectedProfileUser, setSelectedProfileUser] = useState<User | null>(null);
     const [showGroupDetails, setShowGroupDetails] = useState(false);
@@ -118,9 +119,10 @@ const Chat: React.FC = () => {
         if (!message.trim() || !currentChat) return;
 
         try {
-            await sendMessage(message.trim());
+            await sendMessage(message.trim(), 'text', replyTo ? { parentMessageId: replyTo._id, threadRootId: replyTo.threadRootId || replyTo._id } : undefined);
             setMessage('');
             setIsTyping(false);
+            setReplyTo(null);
         } catch (error) {
             console.error('Failed to send message:', error);
         }
@@ -411,6 +413,7 @@ const Chat: React.FC = () => {
                                                 showUsername={isFirstInGroup}
                                                 isFirstInGroup={isFirstInGroup}
                                                 isLastInGroup={isLastInGroup}
+                                                onReply={(m) => setReplyTo(m)}
                                             />
                                         </React.Fragment>
                                     );
@@ -421,6 +424,18 @@ const Chat: React.FC = () => {
 
                         {/* Typing Indicator */}
                         <TypingIndicator typingUsers={typingUsers as any} />
+
+                        {/* Reply bar */}
+                        {replyTo && (
+                            <div className="px-4 pt-3 pb-2 border-t bg-white flex items-start gap-3">
+                                <div className="text-sm text-gray-500">Replying to</div>
+                                <div className="flex-1 text-sm truncate">
+                                    <span className="font-medium">{replyTo.sender.username}: </span>
+                                    <span className="text-gray-600">{replyTo.content}</span>
+                                </div>
+                                <button className="text-gray-500 hover:text-gray-700" onClick={() => setReplyTo(null)}>✕</button>
+                            </div>
+                        )}
 
                         {/* Message Input */}
                         <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 bg-white">

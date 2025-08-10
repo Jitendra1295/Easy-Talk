@@ -110,6 +110,21 @@ export class SocketService {
                 await this.handleLeaveGroup(socket, chatId);
             });
 
+            // Reactions
+            socket.on('reactMessage', async (data) => {
+                await this.handleReactMessage(socket, data);
+            });
+
+            // Edit message
+            socket.on('editMessage', async (data) => {
+                await this.handleEditMessage(socket, data);
+            });
+
+            // Delete message
+            socket.on('deleteMessage', async (data) => {
+                await this.handleDeleteMessage(socket, data);
+            });
+
             // Handle disconnection
             socket.on('disconnect', async () => {
                 await this.handleDisconnect(socket);
@@ -140,10 +155,10 @@ export class SocketService {
         }
     }
 
-    private async handleSendMessage(socket: any, data: { chatId: string; content: string; messageType?: 'text' | 'image' | 'file' }): Promise<void> {
+    private async handleSendMessage(socket: any, data: { chatId: string; content: string; messageType?: 'text' | 'image' | 'file'; parentMessageId?: string | null; threadRootId?: string | null; forwardedFrom?: { userId: string; chatId: string; messageId: string } | null }): Promise<void> {
         try {
             const userId = socket.data.userId;
-            const { chatId, content, messageType = 'text' } = data;
+            const { chatId, content, messageType = 'text', parentMessageId = null, threadRootId = null, forwardedFrom = null } = data;
 
             // Check if user is participant in the chat
             const chat = await Chat.findOne({
@@ -162,7 +177,10 @@ export class SocketService {
                 content,
                 messageType,
                 chatId,
-                readBy: [userId] // Sender has read the message
+                readBy: [userId], // Sender has read the message
+                parentMessageId,
+                threadRootId: threadRootId || parentMessageId || null,
+                forwardedFrom: forwardedFrom ? { ...forwardedFrom, at: new Date() } : null
             });
 
             await message.save();
@@ -173,14 +191,24 @@ export class SocketService {
                 .populate('readBy', 'username email avatar')
                 .lean();
 
+            if (!populatedMessage) {
+                socket.emit('error', { message: 'Error populating message' });
+                return;
+            }
+
             const messageResponse: IMessageResponse = {
-                _id: populatedMessage._id,
-                sender: populatedMessage.sender,
-                content: populatedMessage.content,
-                messageType: populatedMessage.messageType,
-                chatId: populatedMessage.chatId,
-                readBy: populatedMessage.readBy,
-                createdAt: populatedMessage.createdAt
+                _id: (populatedMessage as any)._id,
+                sender: (populatedMessage as any).sender as any,
+                content: (populatedMessage as any).content,
+                messageType: (populatedMessage as any).messageType,
+                chatId: (populatedMessage as any).chatId,
+                readBy: (populatedMessage as any).readBy,
+                deliveredTo: [],
+                parentMessageId: (populatedMessage as any).parentMessageId || null,
+                threadRootId: (populatedMessage as any).threadRootId || null,
+                forwardedFrom: (populatedMessage as any).forwardedFrom || null,
+                reactions: {},
+                createdAt: (populatedMessage as any).createdAt
             };
 
             // Update chat's last message
@@ -191,8 +219,8 @@ export class SocketService {
             // Update unread count for other participants
             const otherParticipants = chat.participants.filter(id => id.toString() !== userId);
             for (const participantId of otherParticipants) {
-                const currentCount = chat.unreadCount.get(participantId.toString()) || 0;
-                await chat.updateUnreadCount(participantId.toString(), currentCount + 1);
+                const currentCount = (chat as any).unreadCount.get(participantId.toString()) || 0;
+                await (chat as any).updateUnreadCount(participantId.toString(), currentCount + 1);
             }
 
             // Emit message to all participants in the chat
@@ -202,6 +230,93 @@ export class SocketService {
         } catch (error) {
             console.error('Error sending message:', error);
             socket.emit('error', { message: 'Error sending message' });
+        }
+    }
+
+    private async handleReactMessage(socket: any, data: { messageId: string; chatId: string; emoji: string }): Promise<void> {
+        try {
+            const userId = socket.data.userId;
+            const { messageId, chatId, emoji } = data;
+            const message: any = await Message.findById(messageId);
+            if (!message) return;
+
+            if (!message.reactions) message.reactions = new Map();
+            const currentSet: string[] = Array.from(message.reactions.get(emoji) || []);
+            const hasReacted = currentSet.some((id: any) => id.toString() === userId.toString());
+            let action: 'add' | 'remove' = 'add';
+            if (hasReacted) {
+                action = 'remove';
+                message.reactions.set(emoji, currentSet.filter((id: any) => id.toString() !== userId.toString()));
+            } else {
+                message.reactions.set(emoji, [...currentSet, userId]);
+            }
+            await message.save();
+
+            const reactionsObj = Object.fromEntries(message.reactions);
+            this.io.to(chatId).emit('reactionUpdated', { messageId, chatId, emoji, userId, action, reactions: reactionsObj });
+        } catch (error) {
+            console.error('Error reacting to message:', error);
+        }
+    }
+
+    private async handleEditMessage(socket: any, data: { messageId: string; chatId: string; content: string }): Promise<void> {
+        try {
+            const userId = socket.data.userId;
+            const { messageId, chatId, content } = data;
+            const message: any = await Message.findById(messageId);
+            if (!message) return;
+            if (message.sender.toString() !== userId.toString()) {
+                socket.emit('error', { message: 'Not allowed to edit this message' });
+                return;
+            }
+            message.content = content;
+            message.editedAt = new Date();
+            await message.save();
+            const updated = await Message.findById(messageId)
+                .populate('sender', 'username email avatar')
+                .lean();
+            if (!updated) return;
+            const reactionsMap: any = (updated as any).reactions || new Map();
+            const reactionsObj = reactionsMap instanceof Map ? Object.fromEntries(reactionsMap) : (reactionsMap as any);
+            const payload: IMessageResponse = {
+                _id: (updated as any)._id,
+                sender: (updated as any).sender as any,
+                content: (updated as any).content,
+                messageType: (updated as any).messageType,
+                chatId: (updated as any).chatId,
+                readBy: (updated as any).readBy,
+                deliveredTo: (updated as any).deliveredTo || [],
+                parentMessageId: (updated as any).parentMessageId || null,
+                threadRootId: (updated as any).threadRootId || null,
+                forwardedFrom: (updated as any).forwardedFrom || null,
+                reactions: reactionsObj,
+                editedAt: (updated as any).editedAt || null,
+                deletedAt: (updated as any).deletedAt || null,
+                deletedBy: (updated as any).deletedBy || null,
+                createdAt: (updated as any).createdAt,
+            };
+            this.io.to(chatId).emit('messageUpdated', payload);
+        } catch (error) {
+            console.error('Error editing message:', error);
+        }
+    }
+
+    private async handleDeleteMessage(socket: any, data: { messageId: string; chatId: string }): Promise<void> {
+        try {
+            const userId = socket.data.userId;
+            const { messageId, chatId } = data;
+            const message: any = await Message.findById(messageId);
+            if (!message) return;
+            if (message.sender.toString() !== userId.toString()) {
+                socket.emit('error', { message: 'Not allowed to delete this message' });
+                return;
+            }
+            message.deletedAt = new Date();
+            message.deletedBy = userId;
+            await message.save();
+            this.io.to(chatId).emit('messageDeleted', { messageId, chatId, deletedBy: userId });
+        } catch (error) {
+            console.error('Error deleting message:', error);
         }
     }
 
@@ -245,7 +360,7 @@ export class SocketService {
             }
 
             // Mark message as read
-            await message.markAsRead(userId);
+            await (message as any).markAsRead(userId);
 
             // Emit read receipt
             this.io.to(message.chatId).emit('messageRead', {
@@ -255,9 +370,9 @@ export class SocketService {
             });
 
             // Update unread count
-            const currentCount = chat.unreadCount.get(userId) || 0;
+            const currentCount = (chat as any).unreadCount.get(userId) || 0;
             if (currentCount > 0) {
-                await chat.updateUnreadCount(userId, currentCount - 1);
+                await (chat as any).updateUnreadCount(userId, currentCount - 1);
             }
         } catch (error) {
             console.error('Error marking message as read:', error);
@@ -298,17 +413,21 @@ export class SocketService {
                 .populate('admin', 'username email avatar')
                 .lean();
 
+            if (!populatedChat) {
+                socket.emit('error', { message: 'Error populating group' });
+                return;
+            }
             const chatResponse: IChatResponse = {
-                _id: populatedChat._id,
-                type: populatedChat.type,
-                participants: populatedChat.participants,
-                name: populatedChat.name,
-                description: populatedChat.description,
-                avatar: populatedChat.avatar,
-                admin: populatedChat.admin,
-                lastMessage: populatedChat.lastMessage,
+                _id: (populatedChat as any)._id,
+                type: (populatedChat as any).type,
+                participants: (populatedChat as any).participants as any,
+                name: (populatedChat as any).name,
+                description: (populatedChat as any).description,
+                avatar: (populatedChat as any).avatar,
+                admin: (populatedChat as any).admin as any,
+                lastMessage: (populatedChat as any).lastMessage as any,
                 unreadCount: 0,
-                createdAt: populatedChat.createdAt
+                createdAt: (populatedChat as any).createdAt
             };
 
             // Emit new chat to all participants
@@ -335,15 +454,17 @@ export class SocketService {
             }
 
             // Add user to group
-            await chat.addParticipant(userId);
+            await (chat as any).addParticipant(userId);
 
-            const user = await User.findById(userId).select('username email avatar isOnline lastSeen');
+            const user = await User.findById(userId).select('username email avatar isOnline lastSeen').lean();
 
             // Emit user joined event
-            this.io.to(chatId).emit('userJoined', {
-                chatId,
-                user
-            });
+            if (user) {
+                this.io.to(chatId).emit('userJoined', {
+                    chatId,
+                    user: user as any
+                });
+            }
 
             socket.join(chatId);
             console.log(`User ${socket.data.username} joined group: ${chatId}`);
@@ -364,7 +485,7 @@ export class SocketService {
             }
 
             // Remove user from group
-            await chat.removeParticipant(userId);
+            await (chat as any).removeParticipant(userId);
 
             // Emit user left event
             this.io.to(chatId).emit('userLeft', {

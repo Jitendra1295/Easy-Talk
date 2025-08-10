@@ -8,7 +8,8 @@ class SocketService {
     connect(token: string) {
         if (this.socket?.connected) return;
 
-        this.socket = io('http://localhost:5000', {
+        const url = (import.meta as any).env?.VITE_SOCKET_URL || 'http://localhost:5000';
+        this.socket = io(url, {
             auth: {
                 token,
             },
@@ -61,10 +62,27 @@ class SocketService {
     }
 
     // Send a message via socket so server can broadcast instantly
-    sendMessage(chatId: string, content: string, messageType: 'text' | 'image' | 'file' = 'text') {
+    sendMessage(
+        chatId: string,
+        content: string,
+        messageType: 'text' | 'image' | 'file' = 'text',
+        options?: { parentMessageId?: string | null; threadRootId?: string | null; forwardedFrom?: { userId: string; chatId: string; messageId: string } | null }
+    ) {
         if (this.socket) {
-            this.socket.emit('sendMessage', { chatId, content, messageType });
+            this.socket.emit('sendMessage', { chatId, content, messageType, ...(options || {}) });
         }
+    }
+
+    reactMessage(messageId: string, chatId: string, emoji: string) {
+        this.socket?.emit('reactMessage', { messageId, chatId, emoji });
+    }
+
+    editMessage(messageId: string, chatId: string, content: string) {
+        this.socket?.emit('editMessage', { messageId, chatId, content });
+    }
+
+    deleteMessage(messageId: string, chatId: string) {
+        this.socket?.emit('deleteMessage', { messageId, chatId });
     }
 
     // Listen for events
