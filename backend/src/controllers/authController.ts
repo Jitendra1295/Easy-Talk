@@ -1,10 +1,13 @@
-import { Response } from 'express';
+import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { User } from '../models/User';
 import { generateToken } from '../utils/jwt';
 import { LoginRequest, RegisterRequest, AuthResponse } from '../types';
 
-export const register = async (req: AuthRequest, res: Response): Promise<void> => {
+/**
+ * Register
+ */
+export const register = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { username, email, password }: RegisterRequest = req.body;
 
@@ -29,30 +32,31 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
                 email: user.email,
                 avatar: user.avatar,
                 isOnline: user.isOnline,
-                lastSeen: user.lastSeen,
+                lastSeen: user.lastSeen
             },
-            token,
+            token
         };
 
         res.status(201).json({ success: true, message: 'User registered successfully', data: response });
     } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        next(error);
     }
 };
 
-export const login = async (req: AuthRequest, res: Response): Promise<void> => {
+/**
+ * Login
+ */
+export const login = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { email, password }: LoginRequest = req.body;
-        const user = await User.findOne({ email });
 
+        const user = await User.findOne({ email });
         if (!user) {
             res.status(401).json({ success: false, message: 'Invalid credentials' });
             return;
         }
 
         const isPasswordValid = await user.comparePassword(password);
-
         if (!isPasswordValid) {
             res.status(401).json({ success: false, message: 'Invalid credentials' });
             return;
@@ -68,21 +72,23 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
                 email: user.email,
                 avatar: user.avatar,
                 isOnline: user.isOnline,
-                lastSeen: user.lastSeen,
+                lastSeen: user.lastSeen
             },
-            token,
+            token
         };
 
         res.status(200).json({ success: true, message: 'Login successful', data: response });
     } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        next(error);
     }
 };
 
-export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
+/**
+ * Logout
+ */
+export const logout = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const userId = req.user?._id || req.body.userId;
+        const userId = req.body?.userId ?? req.user?._id;
 
         if (userId) {
             const user = await User.findById(userId);
@@ -91,14 +97,16 @@ export const logout = async (req: AuthRequest, res: Response): Promise<void> => 
 
         res.status(200).json({ success: true, message: 'Logout successful' });
     } catch (error) {
-        console.error('Logout error:', error);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        next(error);
     }
 };
 
-export const getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+/**
+ * Get profile
+ */
+export const getProfile = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const userId = req.params.userId || req.user?._id;
+        const userId = req.params?.userId ?? req.user?._id;
 
         if (!userId) {
             res.status(400).json({ success: false, message: 'User ID required' });
@@ -113,12 +121,14 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
 
         res.status(200).json({ success: true, message: 'Profile retrieved successfully', data: user });
     } catch (error) {
-        console.error('Get profile error:', error);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        next(error);
     }
 };
 
-export const updateProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+/**
+ * Update profile
+ */
+export const updateProfile = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const userId = req.user?._id;
         const { username, avatar } = req.body;
@@ -156,11 +166,10 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
                 email: user.email,
                 avatar: user.avatar,
                 isOnline: user.isOnline,
-                lastSeen: user.lastSeen,
-            },
+                lastSeen: user.lastSeen
+            }
         });
     } catch (error) {
-        console.error('Update profile error:', error);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        next(error);
     }
 };
