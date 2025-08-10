@@ -13,7 +13,7 @@ export const validate = (schema: Joi.ObjectSchema) => {
             });
         }
 
-        next();
+        return next();
     };
 };
 
