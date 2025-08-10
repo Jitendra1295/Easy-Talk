@@ -2,7 +2,13 @@ import { Request, Response } from 'express';
 import { User } from '../models/User';
 import { generateToken } from '../utils/jwt';
 import { LoginRequest, RegisterRequest, AuthResponse, ApiResponse } from '../types';
-import { AuthRequest } from '../middleware/auth';
+// import { AuthRequest } from '../middleware/auth';
+
+interface AuthRequest extends Request {
+    body: any;
+    params: any;
+    user: any;
+}
 
 export const register = async (req: Request, res: Response): Promise<void> => {
     try {
