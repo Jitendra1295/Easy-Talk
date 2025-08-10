@@ -5,6 +5,11 @@ import { IUserResponse } from '../types';
 
 export interface AuthRequest extends Request {
     user?: IUserResponse;
+    body: any; // add this property
+    params: any; // add this property
+    query: any; // add this property
+    headers: any; // add this property
+    get: any; // add this property
 }
 
 /**
