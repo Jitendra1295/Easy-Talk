@@ -20,6 +20,8 @@ import TypingIndicator from '@/components/TypingIndicator';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { formatChatTime } from '@/utils/date';
 import { User, type Chat } from '@/types';
+import UserProfileModal from '@/components/UserProfileModal';
+import GroupDetailsModal from '@/components/GroupDetailsModal';
 import toast from 'react-hot-toast';
 
 const Chat: React.FC = () => {
@@ -48,6 +50,9 @@ const Chat: React.FC = () => {
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
     const [groupName, setGroupName] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const [showProfile, setShowProfile] = useState(false);
+    const [showGroupDetails, setShowGroupDetails] = useState(false);
 
     console.log(selectedUsers, "selectedUsers::");
 
@@ -354,9 +359,14 @@ const Chat: React.FC = () => {
                                         </p>
                                     </div>
                                 </div>
-                                <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
-                                    <MoreVertical className="w-5 h-5" />
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => currentChat?.isGroupChat ? setShowGroupDetails(true) : setShowProfile(true)}
+                                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                                    >
+                                        <MoreVertical className="w-5 h-5" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -572,6 +582,20 @@ const Chat: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showProfile && !currentChat?.isGroupChat && (
+                <UserProfileModal
+                    user={getChatAvatar(currentChat) || user!}
+                    onClose={() => setShowProfile(false)}
+                />
+            )}
+
+            {showGroupDetails && currentChat?.isGroupChat && (
+                <GroupDetailsModal
+                    chat={currentChat}
+                    onClose={() => setShowGroupDetails(false)}
+                />
             )}
         </div>
     );
