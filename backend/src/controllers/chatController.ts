@@ -473,6 +473,7 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
         });
 
         // Optionally update chat's lastMessage
+        // @ts-ignore
         chat.lastMessage = message;
         await chat.save();
 

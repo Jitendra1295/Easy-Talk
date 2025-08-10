@@ -1,5 +1,30 @@
-import mongoose, { Schema } from 'mongoose';
-import { IMessage } from '../types';
+import mongoose, { Schema, Types } from 'mongoose';
+// import { IMessage } from '../types';
+
+interface IMessage {
+    _id: string;
+    sender: Types.ObjectId;
+    content: string;
+    messageType: 'text' | 'image' | 'file';
+    chatId: Types.ObjectId;
+    readBy: Types.ObjectId[];
+    deliveredTo: Types.ObjectId[];
+    parentMessageId: Types.ObjectId | null;
+    threadRootId: Types.ObjectId | null;
+    forwardedFrom: {
+        userId: Types.ObjectId;
+        chatId: Types.ObjectId;
+        messageId: Types.ObjectId;
+        at: Date;
+    } | null;
+    reactions: Map<string, Types.ObjectId[]>;
+    editedAt: Date | null;
+    deletedAt: Date | null;
+    deletedBy: Types.ObjectId | null;
+    createdAt: Date;
+    updatedAt: Date;
+    save(): Promise<this>
+}
 
 const messageSchema = new Schema<IMessage>({
     sender: {
@@ -24,37 +49,36 @@ const messageSchema = new Schema<IMessage>({
         required: true
     },
     readBy: [{
-        type: Schema.Types.ObjectId,
+        type: Types.ObjectId,
         ref: 'User'
     }],
     deliveredTo: [{
-        type: Schema.Types.ObjectId,
+        type: Types.ObjectId,
         ref: 'User'
     }],
     parentMessageId: {
-        type: Schema.Types.ObjectId,
+        type: Types.ObjectId,
         ref: 'Message',
         default: null
     },
     threadRootId: {
-        type: Schema.Types.ObjectId,
+        type: Types.ObjectId,
         ref: 'Message',
         default: null
     },
     forwardedFrom: {
-        userId: { type: Schema.Types.ObjectId, ref: 'User' },
-        chatId: { type: Schema.Types.ObjectId, ref: 'Chat' },
-        messageId: { type: Schema.Types.ObjectId, ref: 'Message' },
+        userId: { type: Types.ObjectId, ref: 'User' },
+        chatId: { type: Types.ObjectId, ref: 'Chat' },
+        messageId: { type: Types.ObjectId, ref: 'Message' },
         at: { type: Date }
     },
     reactions: {
-        type: Map,
-        of: [Schema.Types.ObjectId], // emoji -> userIds
+        type: Map<string, Types.ObjectId[]>, // emoji -> userIds
         default: {}
     },
     editedAt: { type: Date, default: null },
     deletedAt: { type: Date, default: null },
-    deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
+    deletedBy: { type: Types.ObjectId, ref: 'User', default: null }
 }, {
     timestamps: true
 });
@@ -66,7 +90,7 @@ messageSchema.index({ readBy: 1 });
 messageSchema.index({ threadRootId: 1 });
 
 // Virtual for message response
-messageSchema.virtual('toResponse').get(function () {
+messageSchema.virtual('toResponse').get(function (this: IMessage) {
     return {
         _id: this._id,
         sender: this.sender,
@@ -87,21 +111,22 @@ messageSchema.virtual('toResponse').get(function () {
 });
 
 // Method to mark as read
-messageSchema.methods.markAsRead = async function (userId: string) {
-    if (!this.readBy.includes(userId)) {
-        this.readBy.push(userId);
+messageSchema.methods.markAsRead = async function (this: IMessage, userId: string) {
+    if (!this.readBy.includes(new Types.ObjectId(userId))) {
+        this.readBy.push(new Types.ObjectId(userId));
         return this.save();
     }
     return this;
 };
 
 // Method to check if message is read by user
-messageSchema.methods.isReadBy = function (userId: string): boolean {
+messageSchema.methods.isReadBy = function (this: IMessage, userId: string): boolean {
     return this.readBy.some(id => id.toString() === userId);
 };
 
 // Static method to get messages for a chat with pagination
 messageSchema.statics.getMessagesForChat = async function (
+    this: typeof Message,
     chatId: string,
     page: number = 1,
     limit: number = 50
@@ -130,7 +155,11 @@ messageSchema.statics.getMessagesForChat = async function (
 };
 
 // Static method to get unread message count for a user in a chat
-messageSchema.statics.getUnreadCount = async function (chatId: string, userId: string) {
+messageSchema.statics.getUnreadCount = async function (
+    this: typeof Message,
+    chatId: string,
+    userId: string
+) {
     return this.countDocuments({
         chatId,
         sender: { $ne: userId },
@@ -138,4 +167,4 @@ messageSchema.statics.getUnreadCount = async function (chatId: string, userId: s
     });
 };
 
-export const Message = mongoose.model<IMessage>('Message', messageSchema); 
+export const Message = mongoose.model<IMessage>('Message', messageSchema);

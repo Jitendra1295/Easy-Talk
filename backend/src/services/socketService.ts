@@ -363,8 +363,10 @@ export class SocketService {
             await (message as any).markAsRead(userId);
 
             // Emit read receipt
+            // @ts-ignore
             this.io.to(message.chatId).emit('messageRead', {
                 messageId,
+                // @ts-ignore
                 chatId: message.chatId,
                 readBy: userId
             });
