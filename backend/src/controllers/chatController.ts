@@ -7,7 +7,9 @@ import { IChatResponse, IMessageResponse, IUserResponse, PaginationParams } from
 
 export const getChats = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        console.log('User ID:', req);
         const userId = req.user?._id;
+        console.log('User ID:', userId);
         const { page = 1, limit = 20 } = req.query as PaginationParams;
 
         if (!userId) {

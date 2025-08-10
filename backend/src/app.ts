@@ -20,10 +20,12 @@ app.use(cors({
     credentials: true
 }));
 
-// Rate limiting
+// Rate limiting (relaxed defaults for local/dev)
 const limiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // limit each IP to 100 requests per windowMs
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'), // 1 minute
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000'), // higher default to avoid blocking dev logins
+    standardHeaders: true,
+    legacyHeaders: false,
     message: {
         success: false,
         message: 'Too many requests from this IP, please try again later.'

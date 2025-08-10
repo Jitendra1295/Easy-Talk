@@ -8,14 +8,25 @@ interface MessageBubbleProps {
     message: Message;
     currentUser: User;
     isLastMessage?: boolean;
+    showAvatar?: boolean;
+    showUsername?: boolean;
+    isFirstInGroup?: boolean;
+    isLastInGroup?: boolean;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
     message,
     currentUser,
-    isLastMessage = false
+    isLastMessage = false,
+    showAvatar = false,
+    showUsername = false,
+    isFirstInGroup = false,
+    isLastInGroup = false,
 }) => {
-    const isOwnMessage = message.sender._id === currentUser._id;
+    const senderId = typeof (message as any).sender === 'string'
+        ? (message as any).sender
+        : message.sender._id;
+    const isOwnMessage = senderId === currentUser._id;
 
     const renderMessageContent = () => {
         switch (message.messageType) {
@@ -47,55 +58,40 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     return (
         <div
             className={cn(
-                'flex gap-2 group',
-                isOwnMessage ? 'flex-row-reverse' : 'flex-row',
-                isLastMessage ? 'mb-2' : 'mb-4'
+                'flex items-end gap-2 mx-3', // base flex row
+                isOwnMessage ? 'justify-end' : 'justify-start'
             )}
         >
-            {!isOwnMessage && (
+            {/* Avatar only for other users */}
+            {!isOwnMessage && showAvatar && (
                 <Avatar user={message.sender} size="sm" showStatus />
             )}
 
-            <div className={cn('flex flex-col', isOwnMessage ? 'items-end' : 'items-start')}>
-                {!isOwnMessage && (
-                    <span className="text-xs text-gray-500 mb-1 ml-1">
-                        {message.sender.username}
-                    </span>
+            <div
+                className={cn(
+                    'relative max-w-xs lg:max-w-md px-3 py-2 pr-10 rounded-lg break-words', // <-- pr-10 gives space for time
+                    isOwnMessage
+                        ? cn(
+                            'bg-primary-600 text-white ml-auto',
+                            isFirstInGroup ? 'rounded-br-none' : '',
+                            isLastInGroup ? 'rounded-tr-none' : ''
+                        )
+                        : cn(
+                            'bg-gray-200 text-gray-900 mr-auto',
+                            isFirstInGroup ? 'rounded-bl-none' : '',
+                            isLastInGroup ? 'rounded-tl-none' : ''
+                        )
                 )}
+            >
+                {renderMessageContent()}
 
-                <div
-                    className={cn(
-                        'max-w-xs lg:max-w-md px-4 py-2 rounded-lg break-words',
-                        isOwnMessage
-                            ? 'bg-primary-600 text-white'
-                            : 'bg-gray-200 text-gray-900'
-                    )}
-                >
-                    {renderMessageContent()}
-                </div>
-
-                <div
-                    className={cn(
-                        'flex items-center gap-1 mt-1 text-xs text-gray-500',
-                        isOwnMessage ? 'justify-end' : 'justify-start'
-                    )}
-                >
-                    <span>{formatMessageTime(message.createdAt)}</span>
-                    {isOwnMessage && (
-                        <div className="flex items-center">
-                            {message.readBy.length > 1 ? (
-                                <svg className="w-3 h-3 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            ) : (
-                                <svg className="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
-                                </svg>
-                            )}
-                        </div>
-                    )}
-                </div>
+                {/* Timestamp */}
+                <span className="absolute bottom-1 right-2 text-[10px] opacity-70">
+                    {formatMessageTime(message.createdAt)}
+                </span>
             </div>
+
+
         </div>
     );
 };

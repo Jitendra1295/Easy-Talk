@@ -39,35 +39,31 @@ class SocketService {
         }
     }
 
-    // Join chat room
+    // Join chat room (server expects event: 'joinChat' with chatId as string)
     joinChat(chatId: string) {
         if (this.socket) {
-            this.socket.emit('join:chat', { chatId });
+            this.socket.emit('joinChat', chatId);
         }
     }
 
-    // Leave chat room
+    // Leave chat room (server expects event: 'leaveChat' with chatId as string)
     leaveChat(chatId: string) {
         if (this.socket) {
-            this.socket.emit('leave:chat', { chatId });
+            this.socket.emit('leaveChat', chatId);
         }
     }
 
-    // Send typing indicator
+    // Send typing indicator (server expects single 'typing' event with { chatId, isTyping })
     sendTyping(chatId: string, isTyping: boolean) {
         if (this.socket) {
-            if (isTyping) {
-                this.socket.emit('typing:start', { chatId });
-            } else {
-                this.socket.emit('typing:stop', { chatId });
-            }
+            this.socket.emit('typing', { chatId, isTyping });
         }
     }
 
-    // Mark messages as read
-    markAsRead(chatId: string) {
+    // Send a message via socket so server can broadcast instantly
+    sendMessage(chatId: string, content: string, messageType: 'text' | 'image' | 'file' = 'text') {
         if (this.socket) {
-            this.socket.emit('message:read', { chatId });
+            this.socket.emit('sendMessage', { chatId, content, messageType });
         }
     }
 

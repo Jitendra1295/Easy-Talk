@@ -12,11 +12,11 @@ import {
 import { authenticateToken } from '../middleware/auth';
 import { validate, chatSchemas } from '../middleware/validation';
 
+console.log("Chat routes are being set up");
 const router = Router();
 
 // All routes require authentication
 router.use(authenticateToken);
-
 // Chat routes
 router.get('/chats', getChats);
 router.get('/chats/:chatId', getChat);

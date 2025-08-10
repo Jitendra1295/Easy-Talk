@@ -45,6 +45,38 @@ class ApiService {
     );
   }
 
+  // --- helpers to normalize API -> frontend types ---
+  private mapChatPreview(apiChat: any): ChatPreview {
+    return {
+      _id: apiChat._id,
+      name: apiChat.name,
+      isGroupChat: apiChat.type === 'group',
+      participants: apiChat.participants,
+      lastMessage: apiChat.lastMessage
+        ? {
+          content: apiChat.lastMessage.content,
+          sender: apiChat.lastMessage.sender,
+          createdAt: apiChat.lastMessage.createdAt,
+        }
+        : undefined,
+      unreadCount: apiChat.unreadCount ?? 0,
+      updatedAt: apiChat.lastMessage?.createdAt ?? apiChat.createdAt,
+    } as ChatPreview;
+  }
+
+  private mapChat(apiChat: any): Chat {
+    return {
+      _id: apiChat._id,
+      name: apiChat.name,
+      isGroupChat: apiChat.type === 'group',
+      participants: apiChat.participants,
+      lastMessage: apiChat.lastMessage,
+      unreadCount: apiChat.unreadCount ?? 0,
+      createdAt: apiChat.createdAt,
+      updatedAt: apiChat.updatedAt ?? (apiChat.lastMessage?.createdAt || apiChat.createdAt),
+    } as Chat;
+  }
+
   // Auth endpoints
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response: AxiosResponse<ApiResponse<AuthResponse>> = await this.api.post('/auth/login', credentials);
@@ -61,7 +93,8 @@ class ApiService {
   }
 
   async getCurrentUser(): Promise<User> {
-    const response: AxiosResponse<ApiResponse<User>> = await this.api.get('/auth/me');
+    // Backend exposes current user at /api/users/me
+    const response: AxiosResponse<ApiResponse<User>> = await this.api.get('/users/me');
     return response.data.data!;
   }
 
@@ -84,32 +117,44 @@ class ApiService {
 
   // Chat endpoints
   async getChats(): Promise<ChatPreview[]> {
-    const response: AxiosResponse<ApiResponse<ChatPreview[]>> = await this.api.get('/chats');
-    return response.data.data!;
+    try {
+      console.log("getChats response:");
+      const response: AxiosResponse<ApiResponse<ChatPreview[]>> = await this.api.get('/chats');
+      console.log(response, "response.data.data::");
+      const raw = (response.data as any).data || [];
+      return raw.map((c: any) => this.mapChatPreview(c));
+    } catch (error: any) {
+      console.error("❌ getChats failed:", error.response?.data || error.message);
+      throw error; // ensure React Query sees the error
+    }
   }
+
 
   async getChatById(chatId: string): Promise<Chat> {
     const response: AxiosResponse<ApiResponse<Chat>> = await this.api.get(`/chats/${chatId}`);
-    return response.data.data!;
+    const raw = (response.data as any).data;
+    return this.mapChat(raw);
   }
 
   async createPrivateChat(userId: string): Promise<Chat> {
     const response: AxiosResponse<ApiResponse<Chat>> = await this.api.post('/chats/private', {
-      participantId: userId, // <-- userId is the person you're chatting with
+      participantId: userId,
     });
-
-    return response.data.data!;
+    const raw = (response.data as any).data;
+    return this.mapChat(raw);
   }
 
 
   async createGroupChat(data: CreateGroupChatData): Promise<Chat> {
     const response: AxiosResponse<ApiResponse<Chat>> = await this.api.post('/chats/group', data);
-    return response.data.data!;
+    const raw = (response.data as any).data;
+    return this.mapChat(raw);
   }
 
   async updateChat(chatId: string, data: Partial<Chat>): Promise<Chat> {
     const response: AxiosResponse<ApiResponse<Chat>> = await this.api.put(`/chats/${chatId}`, data);
-    return response.data.data!;
+    const raw = (response.data as any).data;
+    return this.mapChat(raw);
   }
 
   async deleteChat(chatId: string): Promise<void> {

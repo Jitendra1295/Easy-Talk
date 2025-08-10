@@ -59,9 +59,16 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         refetch: refetchChats,
     } = useQuery({
         queryKey: ['chats'],
-        queryFn: apiService.getChats,
+        queryFn: () => apiService.getChats(),
         enabled: !!user,
     });
+
+
+    useEffect(() => {
+        if (user) {
+            refetchChats();
+        }
+    }, [user, refetchChats]);
 
     // Restore saved chat when chats are loaded
     useEffect(() => {
@@ -112,10 +119,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         enabled: !!currentChat?._id,
     });
 
-    useEffect(() => {
-        console.log('user in ChatProvider:', user);
-    }, [user]);
-
     // Socket event handlers
     useEffect(() => {
         if (!user) return;
@@ -124,7 +127,14 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             // Update messages in current chat
             if (currentChat && message.chatId === currentChat._id) {
                 queryClient.setQueryData(['messages', currentChat._id], (old: Message[] = []) => {
-                    return [message, ...old];
+                    // Remove matching optimistic temp message to avoid duplicates
+                    const filtered = old.filter((m: any) => {
+                        const isTemp = typeof m._id === 'string' && m._id.startsWith('temp-');
+                        const sameSender = (m as any).sender?._id === (message as any).sender?._id;
+                        const sameContent = m.content === message.content;
+                        return !(isTemp && sameSender && sameContent);
+                    });
+                    return [message, ...filtered];
                 });
             }
 
@@ -148,20 +158,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             });
         };
 
-        const handleTypingStart = (data: { chatId: string; userId: string }) => {
+        const handleTyping = (data: { chatId: string; user: any; isTyping: boolean }) => {
             if (currentChat && data.chatId === currentChat._id) {
-                setTypingUsers(prev => [...prev.filter(id => id !== data.userId), data.userId]);
+                const userId = data.user._id;
+                if (data.isTyping) {
+                    setTypingUsers(prev => [...prev.filter(id => id !== userId), userId]);
+                } else {
+                    setTypingUsers(prev => prev.filter(id => id !== userId));
+                }
             }
         };
 
-        const handleTypingStop = (data: { chatId: string; userId: string }) => {
-            if (currentChat && data.chatId === currentChat._id) {
-                setTypingUsers(prev => prev.filter(id => id !== data.userId));
-            }
-        };
-
-        const handleMessageRead = (data: { chatId: string; userId: string }) => {
-            if (data.userId === user._id) {
+        const handleMessageRead = (data: { messageId: string; chatId: string; readBy: string }) => {
+            if (data.readBy === user._id) {
                 queryClient.setQueryData(['chats'], (old: ChatPreview[] = []) => {
                     return old.map(chat => {
                         if (chat._id === data.chatId) {
@@ -186,21 +195,20 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             });
         };
 
-        // Set up socket listeners
-        socketService.on('message:new', handleNewMessage);
-        socketService.on('typing:start', handleTypingStart);
-        socketService.on('typing:stop', handleTypingStop);
-        socketService.on('message:read', handleMessageRead);
-        socketService.on('chat:created', handleChatCreated);
-        socketService.on('chat:updated', handleChatUpdated);
+        // Set up socket listeners via raw socket instance
+        const sock = socketService.getSocket();
+        sock?.on('message', handleNewMessage as any);
+        sock?.on('typing', handleTyping as any);
+        sock?.on('messageRead', handleMessageRead as any);
+        sock?.on('newChat', handleChatCreated as any);
+        sock?.on('chatUpdated', handleChatUpdated as any);
 
         return () => {
-            socketService.off('message:new');
-            socketService.off('typing:start');
-            socketService.off('typing:stop');
-            socketService.off('message:read');
-            socketService.off('chat:created');
-            socketService.off('chat:updated');
+            sock?.off('message', handleNewMessage as any);
+            sock?.off('typing', handleTyping as any);
+            sock?.off('messageRead', handleMessageRead as any);
+            sock?.off('newChat', handleChatCreated as any);
+            sock?.off('chatUpdated', handleChatUpdated as any);
         };
     }, [user, currentChat, queryClient]);
 
@@ -218,25 +226,34 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         if (!currentChat) return;
 
         try {
-            const message = await apiService.sendMessage(currentChat._id, content, messageType);
+            // Emit via socket for immediate broadcast
+            socketService.sendMessage(currentChat._id, content, messageType);
 
-            // Optimistically update messages
-            queryClient.setQueryData(['messages', currentChat._id], (old: Message[] = []) => {
-                return [message, ...old];
-            });
+            // Optimistic UI update (will be deduped when server message arrives)
+            const optimisticMessage: Message = {
+                _id: `temp-${Date.now()}`,
+                content,
+                sender: user!,
+                chatId: currentChat._id,
+                messageType,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                readBy: [user!._id],
+            } as any;
 
-            // Update chat preview
+            queryClient.setQueryData(['messages', currentChat._id], (old: Message[] = []) => [optimisticMessage, ...old]);
+
             queryClient.setQueryData(['chats'], (old: ChatPreview[] = []) => {
                 return old.map(chat => {
                     if (chat._id === currentChat._id) {
                         return {
                             ...chat,
                             lastMessage: {
-                                content: message.content,
-                                sender: message.sender,
-                                createdAt: message.createdAt,
+                                content: optimisticMessage.content,
+                                sender: optimisticMessage.sender,
+                                createdAt: optimisticMessage.createdAt,
                             },
-                            updatedAt: message.createdAt,
+                            updatedAt: optimisticMessage.createdAt,
                         };
                     }
                     return chat;
@@ -277,7 +294,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
         try {
             await apiService.markMessagesAsRead(currentChat._id);
-            socketService.markAsRead(currentChat._id);
 
             // Update unread count
             queryClient.setQueryData(['chats'], (old: ChatPreview[] = []) => {

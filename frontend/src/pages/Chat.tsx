@@ -15,6 +15,7 @@ import {
 import apiService from '@/services/api';
 import Avatar from '@/components/Avatar';
 import MessageBubble from '@/components/MessageBubble';
+import DateDivider from '@/components/DateDivider';
 import TypingIndicator from '@/components/TypingIndicator';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { formatChatTime } from '@/utils/date';
@@ -256,16 +257,15 @@ const Chat: React.FC = () => {
                                         };
                                         setCurrentChat(fullChat);
                                     }}
-                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                                        currentChat?._id === chat._id
-                                            ? 'bg-primary-50 border border-primary-200'
-                                            : 'hover:bg-gray-100'
-                                    }`}
+                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${currentChat?._id === chat._id
+                                        ? 'bg-primary-50 border border-primary-200'
+                                        : 'hover:bg-gray-100'
+                                        }`}
                                 >
-                                    <Avatar 
-                                        user={getChatAvatar(chat) || user!} 
-                                        size="md" 
-                                        showStatus 
+                                    <Avatar
+                                        user={getChatAvatar(chat) || user!}
+                                        size="md"
+                                        showStatus
                                     />
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between">
@@ -280,9 +280,9 @@ const Chat: React.FC = () => {
                                         </div>
                                         {chat.lastMessage && (
                                             <p className="text-sm text-gray-600 truncate">
-                                                {chat.lastMessage.sender.username === user?.username 
-                                                    ? 'You: ' 
-                                                    : `${chat.lastMessage.sender.username}: `
+                                                {chat.lastMessage.sender.username === user?.username
+                                                    ? '->'
+                                                    : "<-"
                                                 }
                                                 {chat.lastMessage.content}
                                             </p>
@@ -360,16 +360,50 @@ const Chat: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                            {messages.map((msg, index) => (
-                                <MessageBubble
-                                    key={msg._id}
-                                    message={msg}
-                                    currentUser={user!}
-                                    isLastMessage={index === messages.length - 1}
-                                />
-                            ))}
+                        {/* Messages (chronological, newest at bottom) */}
+                        <div className="flex-1 overflow-y-auto py-4 px-0 space-y-1">
+                            {(() => {
+                                const sorted = [...messages].sort(
+                                    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                                );
+                                return sorted.map((msg, index) => {
+                                    const prev = sorted[index - 1];
+                                    const next = sorted[index + 1];
+                                    const msgDate = new Date(msg.createdAt);
+                                    const currDate = msgDate.toDateString();
+                                    const prevDate = prev ? new Date(prev.createdAt).toDateString() : null;
+                                    const showDateDivider = !prev || currDate !== prevDate;
+
+                                    const sameSenderAsPrev = !!prev && prev.sender._id === msg.sender._id;
+                                    const sameSenderAsNext = !!next && next.sender._id === msg.sender._id;
+                                    const isFirstInGroup = !sameSenderAsPrev;
+                                    const isLastInGroup = !sameSenderAsNext;
+
+                                    const label = (() => {
+                                        const today = new Date();
+                                        const yesterday = new Date();
+                                        yesterday.setDate(today.getDate() - 1);
+                                        if (currDate === today.toDateString()) return 'Today';
+                                        if (currDate === yesterday.toDateString()) return 'Yesterday';
+                                        return msgDate.toLocaleDateString();
+                                    })();
+
+                                    return (
+                                        <React.Fragment key={msg._id}>
+                                            {showDateDivider && <DateDivider label={label} />}
+                                            <MessageBubble
+                                                message={msg}
+                                                currentUser={user!}
+                                                isLastMessage={index === sorted.length - 1}
+                                                showAvatar={isLastInGroup}
+                                                showUsername={isFirstInGroup}
+                                                isFirstInGroup={isFirstInGroup}
+                                                isLastInGroup={isLastInGroup}
+                                            />
+                                        </React.Fragment>
+                                    );
+                                });
+                            })()}
                             <div ref={messagesEndRef} />
                         </div>
 
