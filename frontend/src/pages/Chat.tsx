@@ -51,7 +51,7 @@ const Chat: React.FC = () => {
     const [groupName, setGroupName] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    const [showProfile, setShowProfile] = useState(false);
+    const [selectedProfileUser, setSelectedProfileUser] = useState<User | null>(null);
     const [showGroupDetails, setShowGroupDetails] = useState(false);
 
     console.log(selectedUsers, "selectedUsers::");
@@ -202,7 +202,9 @@ const Chat: React.FC = () => {
                 <div className="p-4 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <Avatar user={user!} size="md" showStatus />
+                            <button onClick={() => setSelectedProfileUser(user!)} className="rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                <Avatar user={user!} size="md" showStatus />
+                            </button>
                             <div>
                                 <h2 className="font-semibold text-gray-900">{user?.username}</h2>
                                 <p className="text-sm text-gray-500">Online</p>
@@ -361,7 +363,7 @@ const Chat: React.FC = () => {
                                 </div>
                                 <div className="relative">
                                     <button
-                                        onClick={() => currentChat?.isGroupChat ? setShowGroupDetails(true) : setShowProfile(true)}
+                                        onClick={() => currentChat?.isGroupChat ? setShowGroupDetails(true) : setSelectedProfileUser((getChatAvatar(currentChat) || user!) as User)}
                                         className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
                                     >
                                         <MoreVertical className="w-5 h-5" />
@@ -584,10 +586,10 @@ const Chat: React.FC = () => {
                 </div>
             )}
 
-            {showProfile && !currentChat?.isGroupChat && (
+            {selectedProfileUser && (
                 <UserProfileModal
-                    user={getChatAvatar(currentChat) || user!}
-                    onClose={() => setShowProfile(false)}
+                    user={selectedProfileUser}
+                    onClose={() => setSelectedProfileUser(null)}
                 />
             )}
 
