@@ -93,10 +93,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     }, [user, chats, currentChat]);
 
     // Fetch current chat details
-    const {
-        data: currentChatData,
-        isLoading: currentChatLoading,
-    } = useQuery({
+    const { isLoading: currentChatLoading } = useQuery({
         queryKey: ['chat', currentChat?._id],
         queryFn: () => apiService.getChatById(currentChat!._id),
         enabled: !!currentChat?._id,
@@ -148,20 +145,18 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             });
         };
 
-        const handleTypingStart = (data: { chatId: string; userId: string }) => {
+        const handleTyping = (data: { chatId: string; user: { _id: string }; isTyping: boolean }) => {
             if (currentChat && data.chatId === currentChat._id) {
-                setTypingUsers(prev => [...prev.filter(id => id !== data.userId), data.userId]);
+                if (data.isTyping) {
+                    setTypingUsers(prev => [...prev.filter(id => id !== data.user._id), data.user._id]);
+                } else {
+                    setTypingUsers(prev => prev.filter(id => id !== data.user._id));
+                }
             }
         };
 
-        const handleTypingStop = (data: { chatId: string; userId: string }) => {
-            if (currentChat && data.chatId === currentChat._id) {
-                setTypingUsers(prev => prev.filter(id => id !== data.userId));
-            }
-        };
-
-        const handleMessageRead = (data: { chatId: string; userId: string }) => {
-            if (data.userId === user._id) {
+        const handleMessageRead = (data: { messageId: string; chatId: string; readBy: string }) => {
+            if (data.readBy === user._id) {
                 queryClient.setQueryData(['chats'], (old: ChatPreview[] = []) => {
                     return old.map(chat => {
                         if (chat._id === data.chatId) {
@@ -186,21 +181,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             });
         };
 
-        // Set up socket listeners
-        socketService.on('message:new', handleNewMessage);
-        socketService.on('typing:start', handleTypingStart);
-        socketService.on('typing:stop', handleTypingStop);
-        socketService.on('message:read', handleMessageRead);
-        socketService.on('chat:created', handleChatCreated);
-        socketService.on('chat:updated', handleChatUpdated);
+        // Set up socket listeners (backend-compatible names)
+        socketService.on('message', handleNewMessage);
+        socketService.on('typing', handleTyping as any);
+        socketService.on('messageRead', handleMessageRead);
+        socketService.on('newChat', handleChatCreated);
+        socketService.on('chatUpdated', handleChatUpdated);
 
         return () => {
-            socketService.off('message:new');
-            socketService.off('typing:start');
-            socketService.off('typing:stop');
-            socketService.off('message:read');
-            socketService.off('chat:created');
-            socketService.off('chat:updated');
+            socketService.off('message');
+            socketService.off('typing');
+            socketService.off('messageRead');
+            socketService.off('newChat');
+            socketService.off('chatUpdated');
         };
     }, [user, currentChat, queryClient]);
 
@@ -218,30 +211,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         if (!currentChat) return;
 
         try {
-            const message = await apiService.sendMessage(currentChat._id, content, messageType);
-
-            // Optimistically update messages
-            queryClient.setQueryData(['messages', currentChat._id], (old: Message[] = []) => {
-                return [message, ...old];
-            });
-
-            // Update chat preview
-            queryClient.setQueryData(['chats'], (old: ChatPreview[] = []) => {
-                return old.map(chat => {
-                    if (chat._id === currentChat._id) {
-                        return {
-                            ...chat,
-                            lastMessage: {
-                                content: message.content,
-                                sender: message.sender,
-                                createdAt: message.createdAt,
-                            },
-                            updatedAt: message.createdAt,
-                        };
-                    }
-                    return chat;
-                });
-            });
+            // Send via socket; server will broadcast the message back
+            socketService.sendMessage(currentChat._id, content, messageType);
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Failed to send message');
             throw error;
@@ -277,9 +248,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
         try {
             await apiService.markMessagesAsRead(currentChat._id);
-            socketService.markAsRead(currentChat._id);
-
-            // Update unread count
+            // Removed incorrect socket emit. Server REST currently does not broadcast read receipts.
+            // Update unread count locally
             queryClient.setQueryData(['chats'], (old: ChatPreview[] = []) => {
                 return old.map(chat => {
                     if (chat._id === currentChat._id) {
@@ -288,8 +258,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
                     return chat;
                 });
             });
-        } catch (error) {
-            console.error('Failed to mark messages as read:', error);
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Failed to mark messages as read');
         }
     };
 
@@ -299,19 +269,27 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         }
     };
 
-    const value: ChatContextType = {
-        chats,
-        currentChat: currentChatData || currentChat,
-        messages,
-        typingUsers,
-        setCurrentChat: setCurrentChatWithPersistence,
-        sendMessage,
-        createPrivateChat,
-        createGroupChat,
-        markAsRead,
-        sendTyping,
-        loading: chatsLoading || currentChatLoading || messagesLoading,
-    };
+    const loading = !user || chatsLoading || currentChatLoading || messagesLoading;
 
-    return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
-}; 
+    return (
+        <ChatContext.Provider
+            value={{
+                chats,
+                currentChat,
+                messages,
+                typingUsers,
+                setCurrentChat: setCurrentChatWithPersistence,
+                sendMessage,
+                createPrivateChat,
+                createGroupChat,
+                markAsRead,
+                sendTyping,
+                loading,
+            }}
+        >
+            {children}
+        </ChatContext.Provider>
+    );
+};
+
+export default ChatContext; 

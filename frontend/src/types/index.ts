@@ -65,14 +65,15 @@ export interface CreateGroupChatData {
 }
 
 export interface SocketEvents {
-    'user:online': (userId: string) => void;
-    'user:offline': (userId: string) => void;
-    'message:new': (message: Message) => void;
-    'message:read': (data: { chatId: string; userId: string }) => void;
-    'typing:start': (data: { chatId: string; userId: string }) => void;
-    'typing:stop': (data: { chatId: string; userId: string }) => void;
-    'chat:created': (chat: Chat) => void;
-    'chat:updated': (chat: Chat) => void;
+    'userOnline': (userId: string) => void;
+    'userOffline': (userId: string) => void;
+    'message': (message: Message) => void;
+    'messageRead': (data: { messageId: string; chatId: string; readBy: string }) => void;
+    'typing': (data: { chatId: string; user: User; isTyping: boolean }) => void;
+    'newChat': (chat: Chat) => void;
+    'chatUpdated': (chat: Chat) => void;
+    'userJoined': (data: { chatId: string; user: User }) => void;
+    'userLeft': (data: { chatId: string; userId: string }) => void;
 }
 
 export interface ApiResponse<T = any> {

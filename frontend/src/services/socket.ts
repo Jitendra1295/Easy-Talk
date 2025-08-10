@@ -42,32 +42,35 @@ class SocketService {
     // Join chat room
     joinChat(chatId: string) {
         if (this.socket) {
-            this.socket.emit('join:chat', { chatId });
+            this.socket.emit('joinChat', chatId);
         }
     }
 
     // Leave chat room
     leaveChat(chatId: string) {
         if (this.socket) {
-            this.socket.emit('leave:chat', { chatId });
+            this.socket.emit('leaveChat', chatId);
+        }
+    }
+
+    // Send a message via socket
+    sendMessage(chatId: string, content: string, messageType: 'text' | 'image' | 'file' = 'text') {
+        if (this.socket) {
+            this.socket.emit('sendMessage', { chatId, content, messageType });
         }
     }
 
     // Send typing indicator
     sendTyping(chatId: string, isTyping: boolean) {
         if (this.socket) {
-            if (isTyping) {
-                this.socket.emit('typing:start', { chatId });
-            } else {
-                this.socket.emit('typing:stop', { chatId });
-            }
+            this.socket.emit('typing', { chatId, isTyping });
         }
     }
 
-    // Mark messages as read
-    markAsRead(chatId: string) {
+    // Note: server expects messageId for markAsRead; we keep this unused for now
+    markAsRead(messageId: string) {
         if (this.socket) {
-            this.socket.emit('message:read', { chatId });
+            this.socket.emit('markAsRead', messageId);
         }
     }
 
