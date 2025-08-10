@@ -11,12 +11,22 @@ import {
   ApiResponse
 } from '@/types';
 
+interface ImportMetaEnv {
+  env: {
+    VITE_API_BASE: string;
+  };
+}
+
+declare global {
+  interface ImportMeta extends ImportMetaEnv { }
+}
+
 class ApiService {
   private api: AxiosInstance;
 
   constructor() {
     this.api = axios.create({
-      baseURL: '/api',
+      baseURL: import.meta.env.VITE_API_BASE,
       headers: {
         'Content-Type': 'application/json',
       },
