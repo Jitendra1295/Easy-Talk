@@ -92,20 +92,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     }, [menuOpen, showPicker]);
 
     return (
-        <div
-            className={cn(
-                'group relative flex items-end gap-2 mx-3',
-                isOwnMessage ? 'justify-end' : 'justify-start'
-            )}
-        >
-            {/* Avatar only for other users */}
-            {!isOwnMessage && showAvatar && (
-                <Avatar user={message.sender} size="sm" showStatus />
-            )}
+        <div className="flex items-start px-3">
+            {/* Fixed avatar space */}
+            <div className="w-8 flex-shrink-0">
+                {!isOwnMessage && showAvatar && (
+                    <Avatar user={message.sender} size="sm" showStatus />
+                )}
+            </div>
 
             <div
                 className={cn(
-                    'relative max-w-xs lg:max-w-md px-3 py-2 pr-10 rounded-lg break-words', // <-- pr-10 gives space for time
+                    'relative max-w-xs lg:max-w-md px-3 py-2 pr-10 rounded-lg break-words',
                     isOwnMessage
                         ? cn(
                             'bg-primary-600 text-white ml-auto',
@@ -119,15 +116,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                         )
                 )}
             >
-                {renderMessageContent()}
-                {isEdited && !isDeleted && (
-                    <span className="block mt-1 text-[10px] opacity-70">edited</span>
-                )}
-
-                {/* Timestamp */}
-                <span className="absolute bottom-1 right-2 text-[10px] opacity-70">
-                    {formatMessageTime(message.createdAt)}
-                </span>
+                <div className="flex flex-col">
+                    <div className="whitespace-pre-wrap">{renderMessageContent()}</div>
+                    <div className="flex items-center justify-end gap-2 mt-1">
+                        {isEdited && !isDeleted && (
+                            <span className="text-[10px] opacity-70">edited</span>
+                        )}
+                        <span className="text-[10px] opacity-70">
+                            {formatMessageTime(message.createdAt)}
+                        </span>
+                    </div>
+                </div>
 
                 {/* Reaction pills positioned near the bubble and visible on hover */}
                 {!!reactions && Object.keys(reactions).length > 0 && (
